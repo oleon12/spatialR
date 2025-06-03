@@ -1,0 +1,158 @@
+---
+title: "Check Occurrences"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+When you download occurrence data from GBIF, it often contains various errors and issues. Common problems include occurrences located at (0, 0), coordinates with inverted signs (e.g., -73.00 recorded as 73.00 or 120.00 recorded as -120.00), and points that fall in the ocean. Some coordinates may also be misformatted, such as -73.2000 incorrectly transformed into -732000. In this example, you’ll work with occurrence data for the order Chiroptera, all recorded in the United States.
+
+First, let’s load the required packages and import the occurrence points. The data downloaded directly from GBIF has its columns separated by tabs (\t), which is why we use the <b>*read.delim()*</b> function instead of <b>*read.csv()*</b>. You can use the <b>*dim()*</b> function to check the size of your dataset, and <b>*str()*</b> to inspect its internal structure and content.
+
+```{r, warning=FALSE, message=FALSE}
+
+library(sf)
+library(raster)
+library(dplyr)
+library(ggplot2)
+
+occ_bats <- read.delim("../GBIF/Chiroptera_USA.csv", header = T)
+dim(occ_bats)
+str(occ_bats, max.level=1)
+
+```
+<br>
+
+Now, lets load the polygon. In this example lets read the SHP file for all the US territories.
+
+```{r, warning=FALSE, message=FALSE}
+US_border <- read_sf("../shp/us-state-boundaries/us-state-boundaries.shp")
+
+```
+<br>
+
+Currently, the points are stored as a <b>*data.frame*</b>, but we need to convert them into a spatial object to perform further analyses. It is quite common to find occurrence records without longitude and latitude values, even when the "include coordinates" option is selected during the download.
+
+First, we use the <b>*filter()*</b> function to remove records that lack coordinate information. Then, we convert the data.frame into a spatial object using the <b>*st_as_sf()*</b> function, specifying the column names that contain the longitude and latitude values.
+
+**Remember:** when working with coordinates, X corresponds to longitude and Y to latitude.
+```{r, warning=FALSE, message=FALSE, results='hide'}
+occ_bats <- occ_bats %>% filter(!is.na(decimalLongitude) & !is.na(decimalLatitude))
+occ_bats <- occ_bats %>% st_as_sf(coords = c("decimalLongitude","decimalLatitude"), crs = 4326)
+occ_bats <- st_transform(occ_bats, st_crs(US_border))
+
+occ_bats
+```
+<br>
+
+Now, let’s plot the map along with the occurrence points. As you can see, the map looks a bit strange. This is because the U.S. map includes all its overseas territories (e.g., the Virgin Islands, Marshall Islands).
+
+However, you can also observe that all the points remain in the Western Hemisphere, which indicates that we don’t have any occurrences with inverted coordinates (e.g., longitude mistakenly recorded as positive instead of negative).
+
+```{r, warning=FALSE, message=FALSE, fig.align='center', fig.dpi=300}
+ggplot()+
+  geom_sf(data = US_border, fill="gray", color="black", lwd = 0.1)+
+  geom_sf(data = occ_bats, color="red", size =1, alpha =0.25)+
+  theme_minimal()
+```
+<br>
+
+Now, you can see that some points on the map are from Hawaii, Alaska, and Puerto Rico. In this case, that information is unnecessary, as we are only interested in occurrences from the mainland United States. So, let’s crop the data to focus on the area of interest.
+
+There are several ways to do this, including using external software like QGIS. Here, we’ll create a bounding box (bbox) that covers only the mainland U.S., between Canada and Mexico. Using this bbox, we’ll crop both the occurrence points and the map accordingly.
+
+```{r, warning=FALSE, message=FALSE, , fig.align='center', fig.dpi=300}
+US_Crop <- st_bbox(c(xmin = -125, ymin = 22, 
+                     xmax = -66, ymax = 49),
+                     crs = 4326)
+
+US_border <- st_crop(US_border, US_Crop)
+occ_bats <- st_crop(occ_bats, US_Crop)
+
+
+ggplot()+
+  geom_sf(data = US_border, fill="gray", color="black", lwd = 0.1)+
+  geom_sf(data = occ_bats, color="red", size =1, alpha =0.25)+
+  theme_minimal()
+```
+<br>
+
+Now you have a cleaned set of points—with no inverted coordinates and no (0, 0) values. Next, let’s check how many of these points fall in the ocean. This is a common issue for occurrences recorded near the coastline, where GPS devices or georeferencing methods may have high positional error.
+
+First, you’ll calculate the intersection between the points and the land polygon using the <b>*st_intersects()*</b> function. Be sure to set the parameter sparse = FALSE so that the result is returned as a matrix. Then, extract only the first column ([, 1]), which will be a logical vector: TRUE for points inside the polygon, and FALSE for points outside.
+
+Note that the polygon is wrapped inside the <b>*st_union()*</b> function. This is because the original map consists of a MULTIPOLYGON object representing individual states. Using <b>*st_union()*</b> merges them into a single unified polygon, which improves the performance and accuracy of the intersection operation.
+
+Finally, you’ll split the points into two separate datasets: one for occurrences inside the polygon and another for those outside.
+
+```{r, warning=FALSE, message=FALSE}
+occ_intersect <- st_intersects(occ_bats, st_union(US_border), sparse = F)[,1]
+
+occ_inside <- occ_bats[occ_intersect,]
+occ_outside <- occ_bats[!occ_intersect,]
+
+dim(occ_inside)
+dim(occ_outside)
+```
+<br>
+```{r, warning=FALSE, message=FALSE,fig.align='center', fig.dpi=300}
+
+ggplot()+
+  geom_sf(data = US_border, fill="gray", color="black", lwd = 0.1)+
+  geom_sf(data = occ_inside, aes(color="Inside U.S."), size =1, alpha =0.5)+
+  geom_sf(data = occ_outside, aes(color="Outside U.S."), size =1, alpha =0.5)+
+  scale_color_discrete(name="Location", 
+                       guide = guide_legend( override.aes = list(size = 5, alpha = 1)))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+<br>
+
+Now, you have two different subsets, so you can explore and try to fix the outlier records manually using QGIS or ArcGIS, and then merge all of your data together. Be sure to save your datasets as CSV files.
+
+```{r, warning=FALSE, message=F, eval=FALSE}
+write.table(as.data.frame(occ_inside), file = "../GBIF/Occ_Inside.csv", sep = "\t", quote = F)
+write.table(as.data.frame(occ_outside), file = "../GBIF/Occ_Outside.csv", sep = "\t", quote = F)
+```
+
+---
+
+There are some quick options to fix those outlier points. These are usually records located near the sea or national borders, where device accuracy may have caused the coordinates to shift. One fast strategy is to find the nearest point on the polygon (e.g., a country boundary) and move the outlier there. To do this, identify the nearest line on the polygon border, convert that line to points, and keep the closest point. These new points will serve as the corrected occurrences for the original outliers.
+
+```{r, warning=FALSE, message=FALSE, fig.align='center', fig.dpi=300}
+# 1. Find the nearest line
+nearest_lines <- st_nearest_points(occ_outside, st_union(US_border))
+
+# 2. Convert lines to points (each line becomes 2 points)
+all_points <- st_cast(nearest_lines, "POINT")
+
+# 3. Create pairing index (2 points per original record)
+point_groups <- rep(1:nrow(occ_outside), each = 2)
+
+# 4. Keep only the second point from each pair (the border point)
+border_points <- all_points[seq(2, length(all_points), by = 2)] %>% 
+  st_as_sf()
+
+ggplot()+
+  geom_sf(data = US_border, fill="gray", color="black", lwd = 0.1)+
+  geom_sf(data = occ_inside, aes(color="Inside U.S."), size =1, alpha =0.5)+
+  geom_sf(data = border_points, aes(color="Moved to the U.S."), size =1, alpha =0.5)+
+  scale_color_discrete(name="Location", 
+                       guide = guide_legend( override.aes = list(size = 5, alpha = 1)))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+<br>
+
+Now, merge all the corrected data together and save the final dataset.
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+occ_inside <- cbind(st_drop_geometry(occ_inside),st_coordinates(occ_inside))
+occ_inside
+
+border_points <- cbind(st_drop_geometry(occ_outside), st_coordinates(border_points))
+border_points
+
+occ_final <- rbind(occ_inside, border_points)
+
+write.table(as.data.frame(occ_final), file = "../GBIF/Occ_Final.csv", sep = "\t", quote = F)
+```
