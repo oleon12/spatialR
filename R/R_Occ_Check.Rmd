@@ -38,6 +38,7 @@ First, we use the <b>*filter()*</b> function to remove records that lack coordin
 **Remember:** when working with coordinates, X corresponds to longitude and Y to latitude.
 ```{r, warning=FALSE, message=FALSE, results='hide'}
 occ_bats <- occ_bats %>% filter(!is.na(decimalLongitude) & !is.na(decimalLatitude))
+occ_bats <- occ_bats[!duplicated(occ_bats[c("decimalLatitude", "decimalLongitude")]), ]
 occ_bats <- occ_bats %>% st_as_sf(coords = c("decimalLongitude","decimalLatitude"), crs = 4326)
 occ_bats <- st_transform(occ_bats, st_crs(US_border))
 
