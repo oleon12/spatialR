@@ -7,4 +7,5 @@ In this repository, you'll find some R code to help you learn how to manage biod
 2. <b>Check occurrences</b>: Visualize your GBIF data, identify potential errors, crop spatial objects, and save the cleaned dataset. [HTML version](https://rpubs.com/oleon12/checkocc) or [PDF version](https://github.com/oleon12/spatialR/blob/main/PDF/R_Occ_Check.pdf)
 3. <b>Spatial Analysis I</b>: A simple but nice spatial analysis with bat diversity in the U.S. [HTML version](https://rpubs.com/oleon12/Spat1) or [PDF version](https://github.com/oleon12/spatialR/blob/main/PDF/R_SpatialStats.pdf)
 4. <b>Spatial Analysis II</b>: Reduce spatial autocorrelation in your data with a concise and efficient code. [HTML version](https://rpubs.com/oleon12/Spat2) or [PDF version](https://github.com/oleon12/spatialR/blob/main/PDF/R_SpatialStats_2.pdf)
+5. <b>Spatial Analysis III</b>: Generating Raster Maps of Species Richness and Occurrence Counts. [HTML version](https://rpubs.com/oleon12/Spat3) or [PDF version](https://github.com/oleon12/spatialR/blob/main/PDF/R_SpatialStats_3.pdf)
 
