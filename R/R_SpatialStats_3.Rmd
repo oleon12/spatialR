@@ -1,0 +1,104 @@
+---
+title: "Spatial Analysis III"
+output:
+  pdf_document: default
+  html_document: default
+---
+Let's create an informative raster using our spatial data. This type of analysis is straightforward yet highly informative, especially for observing spatial patterns related to biodiversity (e.g., species richness).
+
+Once again, let's begin by loading all the necessary libraries and data.
+
+```{r, warning=FALSE, message=FALSE, results='hide'}
+library(raster)
+library(terra)
+library(sf)
+library(dplyr)
+
+occ <- read.delim("../GBIF/Occ_Thinned.csv")
+head(occ)
+```
+</br>
+
+First, we’ll convert the data frame (or matrix) into a spatial point object using the EPSG:4326 (WGS 84) projection. Next, using the extent of our point data, we'll generate a raster with an approximate pixel resolution of 50 km.
+
+```{r, message=FALSE, warning=FALSE}
+occ_sf <- st_as_sf(occ, coords = c("X", "Y"), crs = 4326)
+
+rast_grid <- rast(ext(occ_sf), resolution = 0.5, crs = "EPSG:4326")
+```
+</br>
+
+---
+
+<b> Occurrences per Pixel </b>
+
+</br>
+
+Using the initial occurrence data (<b>*occ*</b>), we create a <b>SpatVector</b> object. A <b>SpatVector</b> is a data structure in the <b>*terra*</b> package that represents vector-based spatial data, such as points, lines, or polygons, along with their associated attributes. 
+Paula Moraga
+
+From this new object, we generate a raster. We utilize the <b>*rasterize()*</b> function, applying it to the initial raster (<b>rast_grid</b>) and the SpatVector (<b>points</b>). The count function is specified to aggregate the data. Within the same function, we indicate the field to be used for counting (<b>"species"</b>). This field corresponds to the column name in our dataset; ensure it matches your data accordingly.
+
+Although we used the field <b>"species"</b>, this does not represent species richness. Instead, the function counts the number of occurrences within each pixel. Therefore, the resulting raster indicates the number of occurrences per pixel, not the number of unique species.
+
+```{r}
+points <- vect(occ, geom=c("X","Y"), crs ="EPSG:4326")
+
+occurrences_raster <- rasterize(points, rast_grid, field = "species", fun = "count")
+```
+
+</br>
+
+Now, let's visualize the result of this raster. 
+
+```{r, fig.align='center', fig.dpi=300}
+
+plot(occurrences_raster, main = "Occurrences per Pixel (~50 Km)")
+
+```
+
+---
+
+<b> Species per Pixel </b>
+
+</br>
+
+Now, let’s calculate species richness using the same raster (<b>rast_grid</b>) at an approximate resolution of 50 km. Instead of using the usual count function in <b>*rasterize()*</b>, we employ a custom summarizing function that computes the number of unique species per pixel.
+
+```{r}
+richness_raster <- rasterize(points, rast_grid, field = "species", 
+                            fun = function(x) length(unique(na.omit(x))))
+```
+
+</br>
+
+Now, let's visualize the result of this raster. 
+
+```{r, fig.align='center', fig.dpi=300}
+
+plot(richness_raster, main = "Species Richness per Pixel (~50 Km)")
+
+```
+
+---
+Now you can save or export the rasters. Various raster file types exist—such as ASCII Grid (.asc), GRD (.grd), and GeoTIFF (.tif)—but GeoTIFF is typically the most widely used format in GIS.
+
+```{r, eval=FALSE}
+writeRaster( occurrence_raster, filename = "../GBIF/occurrence_count.tif",
+             format = "GTiff", overwrite = TRUE )
+
+writeRaster( richness_raster, filename = "../GBIF/richness_count.tif",
+             format = "GTiff", overwrite = TRUE )
+```
+
+If you need it in ASCII
+
+```{r, eval=FALSE}
+
+writeRaster( occurrence_raster, filename = "../GBIF/occurrence_count.asc",
+             format = "AAIGrid", overwrite = TRUE )
+
+writeRaster( richness_raster, filename = "../GBIF/richness_count.asc",
+             format = "AAIGrid", overwrite = TRUE )
+
+```
